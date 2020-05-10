@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-05-09 18:33:15
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-05-10 19:29:29
+* @Last Modified time: 2020-05-10 19:40:09
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -44,7 +44,33 @@
     + 一个 vNode 描述什么，这些都是在 挂载/patch 阶段进行，带来两个问题： 无法从 AOT (预编译)层面进行优化，开发者无法手动优化。
     + 通过 flags 标明，避免很多耗性能的判断，通过位运算符再次提升运行时性能。 flags & VNodeFlags.ELEMENT
     + Vue3 采用的是 inferno 手段。
-- 枚举 vNodeFlag 值： 
+- 枚举 vNodeFlags: 通过枚举/对象来进行表示，例如：
+    + 通过枚举属性，派生出额外三个标示。ELEMENT， COMPONENT_STATEFUL， COMPONENT
+    + 判断 vNode 类型，通过按位与 & 运算。使用位运算的技巧。
+```js
+const VNodeFlags = {
+  // html 标签
+  ELEMENT_HTML: 1,
+  // SVG 标签
+  ELEMENT_SVG: 1 << 1,
+
+  // 普通有状态组件
+  COMPONENT_STATEFUL_NORMAL: 1 << 2,
+  // 需要被keepAlive的有状态组件
+  COMPONENT_STATEFUL_SHOULD_KEEP_ALIVE: 1 << 3,
+  // 已经被keepAlive的有状态组件
+  COMPONENT_STATEFUL_KEPT_ALIVE: 1 << 4,
+  // 函数式组件
+  COMPONENT_FUNCTIONAL: 1 << 5,
+
+  // 纯文本
+  TEXT: 1 << 6,
+  // Fragment
+  FRAGMENT: 1 << 7,
+  // Portal
+  PORTAL: 1 << 8
+}
+```
 
 
 
