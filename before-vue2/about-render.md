@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-05-09 18:33:15
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-05-11 14:21:53
+* @Last Modified time: 2020-05-12 14:17:48
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -195,7 +195,34 @@ function h(tag, data = null, children = null) {
 
 
 - 挂载普通标签元素： 挂载方法根据 VNodeflags 采用不同的挂载方式。element, component, text, fragment, portal
-    + 
+    + mount: 根据类型采用不同的挂载方法：element, component, text, fragment, portal
+    + mountElement: (VNode, container, isSVG)
+        * 处理 VNodeData:  switch style/class/on/props 
+            - 对于 class: 底层设计应该是 class 的值，体现为 字符串，可以直接挂载。但是对于应用层，可以是数组，可以是对象。 可以通过一个函数进行转换。
+            - attr: 标签上存在的属性。 标准属性，通过 document.element.id/class 等能访问的。
+            - dom prop: 存在于 dom 对象上的属性。 setAttribute 可以为 dom 元素设置标准/非标准属性，但是设置前，会将属性值转换为字符串加到元素上。一些特殊的 attribute 如 checked/disabled/value/selected/muted, 只要出现， property 就会设置为 true, 只有 removeAttribute 才会变为 false.
+            - 此时我们只需要将这些属性额外的拿出来，还有携带大写的如: innerHTML, text Content, 直接作为 prop 对待。其他的当作 attr 处理。
+            - 事件的处理： 主要在于设计 VNodeData. 如果直接以 click 作为属性，会无法与 attr 进行区别，而如果要规定所有的方法，显然是比较笨的。那么采取原声的 DOM 对象设计，将所有的事情，采用 on+'click' 进行标示。 当然，从模版到 VNode 是编译器来做的。 确定后，通过 addEvent/attachevent
+        * 挂载子节点： 根据类型挂载，再次对每个子节点调用 mount 函数。
+        * 对于 SVG： 创建使用： document.createElementNS， 对于 circle, react 等，通过父元素是否为 svg, 来判断接下来，是否创建 svg 标签。传递负元素的 svg 标签。
+        * 对其他挂载函数，也需要视情形增加第三个参数。
+
+- 挂载纯文本，Fragment,portal:
+    + 挂载纯文本： document.createTextNode
+    + 挂载 Fragment: 类似于 VNode 的 children, 只是对于 Fragment 标签不进行渲染。
+        * el 属性指向： 一个节点指向当前；多个节点指向第一个节点；没有创建文本节点，引用空文本节点。
+        * 意义： 在于 patch 阶段， DOM 元素移动时，确保被放置到争取的位置。合理使用 appendChild, removeChild, insertBefore.
+    + 挂载 Portal: 类似于挂载，是将其挂载到 tag 指向的元素。那么 Portal 的 el 应该指向谁？他需要站位庸俗，因为他的事件机制仍然是按照 DOM 结构实施，需要一个占位元素来承接事件。我们创建一个空的文本节点，并挂载到 container 下。让 el 引用该文本节点。
+- 有状态组件的挂载和原理： 组件产出 VNode, 将 VNode 挂载到 container 中。
+    + 由于组件类型： 将组件内部再次划分为 有状态组件/函数式组件 进行处理。
+    + 挂载有状态的组件：像 data, props, ref, slots 属于基本原理基础上，再次依据组件实例设计的产物，为 render 函数生成 VNOde 的过程中提供数据来源服务，而组件产出 VNode 才是核心。
+        * 创建组件实例： new vnode.tag()
+        * 获取组件产出的 VNode: 调用组件的 render 函数，获取 VNode.
+        * mount 挂载： 挂载 vnode 到 container.
+        * 让组件实例 $el 和 vnode.el 引用当前组件的根 DOM 元素。如果组件返回的是一个 Fragment, 那么 $el 和 el 应该是该片段的第一个 DOM 元素。
+- 函数式组件的挂载和原理： 函数式组件是一个返回 VNode 的函数：
+    + 比有状态的组件少了一个实例化的过程。
+    + 有状态组件实例化过程中，会产生 data, state, computed, watch 声明周期等内容。而函数式组件，只有 props 和 slots, 性能会更好。
 
 
 
