@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-05-09 18:33:15
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-05-12 14:17:48
+* @Last Modified time: 2020-05-13 20:18:34
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -223,6 +223,77 @@ function h(tag, data = null, children = null) {
 - 函数式组件的挂载和原理： 函数式组件是一个返回 VNode 的函数：
     + 比有状态的组件少了一个实例化的过程。
     + 有状态组件实例化过程中，会产生 data, state, computed, watch 声明周期等内容。而函数式组件，只有 props 和 slots, 性能会更好。
+
+
+## 渲染器之 patch
+
+渲染器的另一个职责，是负责对新旧 VNode 进行对比，并以合适的方式更新 DOM， 也就是 patch.这里主要说比对逻辑和比对过程要遵守哪些规则。
+
+- 基本原则： 重渲染 (re-render) 是从组件的更新开始的。数据更新 -> 框架对 UI 更新 -> 真实 DOM 更新。
+    + 初次渲染时，让 container 挂载 vnode. 再次渲染即可调用 patch 函数。
+    + patch 方法进行 新旧DOM 对比，也就是 diff.那么比对规则时什么呢？
+        * 只有同类型的 VNode 才有比对意义。不同的则直接进行替换即可。
+        * 同类型的 VNode, 在根据不同类型调用不同的对比函数。
+- 替换 VNode: replaceVNode
+    + removeChild + mount, 后续看缺陷。 比如事件，比如组件的生命周期。
+- 更新标签元素: 
+    + tag 值不同： 我们认为不同的标签渲染的内容不同，此时也不会进行新旧对比，而是直接使用 repladVNode.
+    + tag 相同： 差异就在 VNodeData 和 children 上。
+        * VNodeData: 将新的全部应用到元素上，再移除已经不存在的数据。
+            - style， class， DOM Prop, Attr, events,
+            - patch 和 mount 函数那用来处理 VNodeData 相似，只是有无老的 VNodeData, 那么可以封装 patchData, 传入 null 作为旧数据。
+        * 更新子节点：patchChildren, 思路是能写出代码的原因。
+            - 思考子节点情形，没有子节点，一个字节点，多个字节点。
+            - 一个 -> 一个： 递归调用 patch ().
+            - 一个 -> no: removeChild, 但如果之前是一个 Fragment, 那么需要把多个元素移除。但本质仍然是，把已经渲染好的 DOM 元素从页面上移除。
+            - 一个 -> 对个：将旧的单个子节点移除，将新的多个字节点挂载。
+            - null -> 1: 挂载新的字节点。
+            - null -> null: nothing.
+            - null -> n: 将新的多个字节点挂载。
+            - n -> 1: 移除旧的，挂载新的。
+            - n -> null: 移除旧的。
+            - n -> n: 核心的 diff, 同层级比较。
+        * 事实上： 只有 n -> n 时，才会进入核心的 diff, 尽可能的复用子节点。如果你不考虑效率，那么可以沿用，将所有的旧的字节点移除，再挂载新的字节点，但就没有复用可言了。
+- 更新文本节点： patchText: 文本节点/注释节点。
+    + 通过设置 nodeValue 的值来进行更新。
+- 更新 Fragment: patchFragment, 是简化版的标签元素的更新。
+    + 因为 Fragment 没有标签元素，所以实际上就是更新 children. 直接调用 patchChildren 进行更新。nextVNode.el 设置指向，设置逻辑同 mountFragment.
+- 更新 Portal: patchPortal， 类似于 Fragment, 但是挂载容器会发生变化。
+    + 调用 patchChildren 更新子节点，然后更新 el 指向，Portal 的 el 始终是一个占位的文本节点。
+    + 由于我们传递的是旧的字节点容器，所以更新完成后子节点仍然在旧的容器中。在更新完成后，需要将旧容器的元素搬运到新的容器中。
+    + appendChild 的元素如果已经存在于 DOM 中，那么再次 appendChild 就可以搬运元素了。
+
+- 有状态组件的更新： 在什么情形下才会触发更新？主动更新和被动更新。
+    + 主动更新: 组件自身的状态发生变化，导致组件的更新，比如 data 数据发生了变化就必须要重新渲染。 
+        * 组件的核心是渲染函数 h, 渲染函数会产出 VNode, 渲染器会将渲染函数产出的 VNode 渲染为真实的 DOM, 当组件的状态发生变化时，我们需要做的就是重新执行渲染函数并产出新的 VNode, 最后通过新旧 VNode 之间的补丁算法完成真实的 DOM 更新。
+        * mount 和 update 都需要调用 render 获取 VNode, 将 VNode 挂载到容器元素。
+    + 被动更新: 那么当组件外比如父组件传递的状态变化，引起子组件的更新，当外部状态变化导致组件的更新叫做被动更新。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
