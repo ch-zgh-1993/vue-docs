@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-05-09 18:33:15
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-05-13 20:18:34
+* @Last Modified time: 2020-05-18 20:40:00
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -267,12 +267,21 @@ function h(tag, data = null, children = null) {
     + 主动更新: 组件自身的状态发生变化，导致组件的更新，比如 data 数据发生了变化就必须要重新渲染。 
         * 组件的核心是渲染函数 h, 渲染函数会产出 VNode, 渲染器会将渲染函数产出的 VNode 渲染为真实的 DOM, 当组件的状态发生变化时，我们需要做的就是重新执行渲染函数并产出新的 VNode, 最后通过新旧 VNode 之间的补丁算法完成真实的 DOM 更新。
         * mount 和 update 都需要调用 render 获取 VNode, 将 VNode 挂载到容器元素。
+        * 给组件实例增减 mounted 参数，来判断组件是初次挂载还是后续更新。
+        * 更新步骤： 取到旧的 VNode, 重新调用 render 获取新的 VNode, 调用 patch 对比新旧 VNode, 完成更新操作，使用新的 DOM 更新 vnode.el.
+    + 初步了解组件的外部状态: props。 props 的改变就是组件的外部状态发生变化，引起组件的更新。
+        * 从 VNodeData 中提取 props.
     + 被动更新: 那么当组件外比如父组件传递的状态变化，引起子组件的更新，当外部状态变化导致组件的更新叫做被动更新。
+        * 当外部状态发生改变，相当于两次渲染组件，但是给了不同的 data.生成了两次不同的 VNode, 通过 patchComponent 进行更新。如果是有状态的组件，获取组件实例，更新 $props, 调用 _update 更新组件。
+        * 正常情形， VNode 的 children 本来应该存储子节点，但对于组件类型的 VNode， 子节点应该是插槽，我们将插槽内容存储在了 slots 属性，而非 children 中， 我们就用 children 来存储组件实例了。
+        * 当父组件的状态变化后，渲染不同的组件。这里有一个原则： 我们认为不同的组件渲染不同的内容。通过判断是否为同一个组件，移除原来的组件，重新对组件进行挂载。
+    + 我们需要 shouldUpdateComponent： // TODO: 占位
 
 
-
-
-
+- 函数式组件的更新: 原理同有状态的组件，新旧 VNode 进行对比，完成更新。
+    + 函数式组件没有实例，因此需要将 props data 通过参数进行传递。同有状态的组件， children 我们用来存储组件产出的 VNode， slots 也会用来存储插槽数据。这是设计上决定的，并不一定非要这么做，但为了与 Vue3 保持一致，我们采取该方法。
+    + vnode.handle.update() 完成初次挂载。handle.prev: 存储旧的 VNode; handle.next: 存储新的 VNode;  handle.container: 挂载容器。
+    + 通过 VNode 生成 prevTree/nextTree, 调用patch 函数进行更新即可。
 
 
 
