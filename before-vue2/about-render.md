@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-05-09 18:33:15
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-05-18 20:40:00
+* @Last Modified time: 2020-05-19 20:50:23
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -282,30 +282,45 @@ function h(tag, data = null, children = null) {
     + 函数式组件没有实例，因此需要将 props data 通过参数进行传递。同有状态的组件， children 我们用来存储组件产出的 VNode， slots 也会用来存储插槽数据。这是设计上决定的，并不一定非要这么做，但为了与 Vue3 保持一致，我们采取该方法。
     + vnode.handle.update() 完成初次挂载。handle.prev: 存储旧的 VNode; handle.next: 存储新的 VNode;  handle.container: 挂载容器。
     + 通过 VNode 生成 prevTree/nextTree, 调用patch 函数进行更新即可。
+ 
+## 渲染器的核心 Diff 算法
 
+- 减少 DOM 操作的性能开销： 渲染器的 patch 属于 Diff 算法之内。当新旧子节点都是多个节点时，核心 diff 算法的作用才体现的出来。
+    + 遍历旧的子节点，将其全部移除；再遍历新的子节点，将其全部添加，称为简单的 diff 算法。
+    + 当一个 li 列表，只是移动了位置时，复用 li 标签，就能减少 移除和新建 DOM 元素带来的性能开销。完全可以通过遍历新旧 VNode, 对他们一一进行对比，由于他们时相同的标签，不回移除和新建 DOM 元素，只会更新 VNodeData 和 children. 当旧的长时，移除多余元素。新的长时，新增元素。
+    + 该算法在没有 key 时所采用的算法，该算法存在优化空间。
+![核心 diff 内容](../img/diff-improtant.png "diff improtant")
 
+- 尽可能的复用 DOM 元素： 
+    + key 的作用： 当新旧 children 只是顺序不一样，我们可以通过移动元素来达到更新目的。移动需要新旧的映射关系，其实就是 key.
+        * 可以在 VNodeData 中设置一个 key 属性，为了更方便的使用，我们把 key 添加到 VNode 本身，即 h 的 return 中。
+        * 这样就可以遍历新旧 children 来尝试寻找 key 相同的节点，找到了则可以复用该节点，我们仍然要调用 patch 进行更新，如果新旧节点的 VNodeData 和 children 都没有变化，则 patch 不会做任何事情(这是优化的关键).如果有变化，则 patch 保证了更新的正确性。
+    + 找到需要移动的节点： 
+        * 怎么确定是否需要移动节点呢？如果在寻找的过程中遇到的索引呈现递增趋势，则说明新旧 children 中节点顺序相同，不需要移动操作。相反,如果在寻找的过程中遇到的索引值不呈现递增趋势，则说明需要移动操作。
+        * 当我们决定节点是否需要进行移动时，在遍历新节点时，会遇到一个值，这个值时寻找过程中在旧 children 中所遇到的最大索引值，在后续寻找过程中，发现比最大索引值小的节点，则意味着需要被移动。这也是 react 使用的算法。可以使用 lastIndex 标记当前遇到的最大值，在后续移动中更新该变量。
+    + 移动节点：
+        * 当遇到最大值时，此节点不需要移动。直接调用 patch 函数更新即可，需要注意的一点：新 children 中的 li-c 节点在经过 patch 函数之后，也将存在对真实 DOM 元素的引用。
+        * 节点需要进行移动时，需要移动真实 DOM， 新的 lic 已经保存了真实 DOM 的引用，而对于要移动的 li-a ，我们可以直接通过旧的节点引用拿到 DOM 引用。
+![移动子元素](../img/move-children.png)
+    + 添加新元素:  
+        * 遍历结束未找到，直接挂载。但是 mountElement 是使用 appendChild 来进行操作的，我们需要在特定的位置，所以需要增加参数，使用 insertBefore 插入。
+    + 移除不存在的元素:  在 新节点遍历结束后，在有限遍历一次旧节点，拿着旧节点去新节点中寻找对应的节点，如果找不到，则该节点需要移除。
+    + 至此，一个 diff 算法结束，这个 diff 算法就是 react 所采用的算法。但该算法仍然存在可以优化的空间。
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+- 另一个思路 - 双端比较： 这种属于算法优化了吧。
+    + 双端比较的原理：
+        * 想要找到优化的关键，首先要知道问题。在一些情况下，只需要一次移动即可，但 react 用了两次移动。增加移动次数，当然会增加性能开销。
+        * 采用 4 个索引值， oldStartIdx, oldEndInx, newStartIdx, newEndIdx 分别存储新旧 children 的两个端点的值。
+        * 一次的比较过程，需要进行四次比较。oldStartIdx VNode <-> newStartIdx VNode, oldEndInx <-> newEndIdx, oldStartIdx <-> newEndIdx, oldEndInx <-> newStartIdx. 这四次对比中，一旦找到了可复用的节点，会停止后续的步骤。
+        * oldEndInx key == newStartIdx key: 调用 patch 函数更新节点内容，再移动最后一个节点到第一个节点。更新索引位置。
+        * 循环结束的条件: oldStartIdx > oldEndIdx || newStartIdx > newEndIdx
+        * oldEndIdx key == newEndIdx key: 调用 patch, 但不需要进行移动，更新索引位置。
+        * oldStartIdx key == newEndIdx key: 调用 patch 函数进行更新，将 oldStartIdx 移动到 oldEndIdx 后。更新索引。
+        * oldStartIdx key == newStartIdx key, 不需要移动，只需要 patch, 更新索引即可。
+    + 双端比较的优势: 双端比较在移动 DOM 方面更具有普适性，不会因为 DOM 结构的差异而产生影响。
+    + 非理想情况的处理方式: 上述情形，是在理想情形下老的在新的中有对应时。而当四个步骤都没有匹配成功时。
+        * 增加一个处理，便利旧的 children， 试图找到新的 children 中第一个节点相同的节点，并把该节点的索引值记录下来。也意味着将旧 children 中对应的真实 DOM 移动到最前面。并更新索引。
+        * 增加两个策略，因为上面更新后有个位置的值会被设置为 undefined, 所以下次当 oldStart/oldEnd 为 undefined 时，直接跳过。
 
 
 
