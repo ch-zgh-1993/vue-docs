@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-05-09 18:33:15
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-05-19 20:50:23
+* @Last Modified time: 2020-05-21 20:08:09
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -307,7 +307,7 @@ function h(tag, data = null, children = null) {
     + 移除不存在的元素:  在 新节点遍历结束后，在有限遍历一次旧节点，拿着旧节点去新节点中寻找对应的节点，如果找不到，则该节点需要移除。
     + 至此，一个 diff 算法结束，这个 diff 算法就是 react 所采用的算法。但该算法仍然存在可以优化的空间。
 
-- 另一个思路 - 双端比较： 这种属于算法优化了吧。
+- 另一个思路 - 双端比较： 这种属于算法优化了吧。 vue2 采用的是双端比较。
     + 双端比较的原理：
         * 想要找到优化的关键，首先要知道问题。在一些情况下，只需要一次移动即可，但 react 用了两次移动。增加移动次数，当然会增加性能开销。
         * 采用 4 个索引值， oldStartIdx, oldEndInx, newStartIdx, newEndIdx 分别存储新旧 children 的两个端点的值。
@@ -321,6 +321,27 @@ function h(tag, data = null, children = null) {
     + 非理想情况的处理方式: 上述情形，是在理想情形下老的在新的中有对应时。而当四个步骤都没有匹配成功时。
         * 增加一个处理，便利旧的 children， 试图找到新的 children 中第一个节点相同的节点，并把该节点的索引值记录下来。也意味着将旧 children 中对应的真实 DOM 移动到最前面。并更新索引。
         * 增加两个策略，因为上面更新后有个位置的值会被设置为 undefined, 所以下次当 oldStart/oldEnd 为 undefined 时，直接跳过。
+    + 添加新元素： 当新的 children 在老的 children 中找不到时，需要添加新的元素。
+        * 挂载位置： newStartIdx 属于当前位置中较大的一个，所以可以挂载在 oldStartIdx 的位置。
+        * 当循环结束后，oldEndIdx < oldStartIdx ，说明仍然有新的节点没有处理，应该调用 mount 将其挂载到 oldStartIdx 前面即可。
+    + 移除不存在的元素: 循环结束后， newEndIdx < newSartIdx 说明有元素需要被移除。
+        * 在循环外判断，将 oldStartIdx ~ oldEndIdx 中间的元素移除即可。
+
+
+- inferno 所采用的核心 diff 算法及其原理： 
+    + 在 Vue3 中， 将采用另一种核心的 diff 算法，借鉴于 ivi 和 inferno. ivi 和 inferno 在 DOM 操作等方面要略优于 vue2 的双端比较。但总体的性能表现并不单纯的由 Diff 算法来决定，比如在创建 VNode 就确定其类型，在 mount/patch 采用位运算来进行判断 VNode 类型，在配合上核心的 diff 算法，才能产生一定优势，这也是 vue3 接纳这种算法的原因之一。
+    + 相同的前置和后置元素: 这个算法最早被用于比较两个不同文本之间的差异，在文本 diff 中，真正进行核心的 Diff 前，会有一个预处理的过程，可以先对两个文本进行 === 比较，在某些情形下避免 diff 执行，还有其他方法，比如去除相同的前缀和后缀。将预处理应用的 VNode 的 diff 中。
+        * 比较相同前缀，从 0 开始，向后对比，直到遇到一个不同的 children 时停止。接着比较相同的后缀，我们使用两个索引，一个指向新 children 中最后一个 child, 一个指向旧的，逐步向前遍历，直到不同的 children 为止。
+        * 此时，我们拿到了前向后遍历的索引 s，后向前索引的两个索引，oldIdx, newIdx. j > oldIdx && j <= newIdx 说明需要新增节点。插入在 newIdx 之前。
+        * j > newIdx && j <= oldIdx , 需要移除节点。
+        * 三次遍历，当第一次产生结果时，可以判断是否需要执行第二个，出于性能考虑，避免不必要的判断出现，使用 label 语句。 label: { true && break label }
+
+    + 判断是否需要进行 DOM 移动: 在一些情况下，简单通过前后去除的预处理，并不能结束 diff 逻辑。
+        * 实际上，无论是 reactDiff, Vue2 的diff, 重点在于判断是否有节点需要移动，以及如何移动和找出哪些需要被添加和移除的几点。
+        * 在经过预处理后， s !> oldIdx && s !> newIdx.此时需要添加 else 分支。
+        * 
+
+
 
 
 
