@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-05-09 18:33:15
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-05-21 20:08:09
+* @Last Modified time: 2020-05-22 20:03:55
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -339,7 +339,38 @@ function h(tag, data = null, children = null) {
     + 判断是否需要进行 DOM 移动: 在一些情况下，简单通过前后去除的预处理，并不能结束 diff 逻辑。
         * 实际上，无论是 reactDiff, Vue2 的diff, 重点在于判断是否有节点需要移动，以及如何移动和找出哪些需要被添加和移除的几点。
         * 在经过预处理后， s !> oldIdx && s !> newIdx.此时需要添加 else 分支。
-        * 
+        * 构造一个数组 source, 每个位置初始化位 -1, 长度为新 children 经过预处理后剩下的节点数量。 遍历旧的 children, 在新的 children 中寻找相同 key 的节点，找到复用节点，通过 patch 进行更新，更新 source 数组中的位置。新的 children 中的值在老的 children 没有找到，则 source 仍为 -1。 判断是否需要移动节点，采用 react 的判断方法， 通过判断当前遍历新节点的位置 < 遇到的索引最大值，则需要进行移动。
+        * 双层嵌套循环的时间复杂度为 On2, 所以通过建立索引表的方式，快速定位旧 children 在新的 children 中的位置。用空间换时间。 该块代码的目的是对新旧 children 中具有相同的 key 值节点进行更新。
+        * 当寻找不到时，需要对节点进行移除。 标示已经更新过的节点数量，应该小于新 children 中节点的数量，则说明该节点时多余的，需要将其进行移除。
+    + DOM 移动的方式： 通过之前判断的是否需要进行 DOM 移动， moved 作为变量标示。 source 数组，存储着预处理后剩余未处理节点，并存储着新 children 的节点在旧 children 中的位置。
+        * 通过 source 计算出一个最长递增子序列，用于 DOM 移动。 得出需要最长子序列，在新 children 中的下标表示。所以最长递增子序列都是不需要进行移动的，在判断该节点是否时新的节点，然后移动剩余的节点。
+        * 求最长递增子序列： 动态规划求解的问题。
+
+- 不足之处： 比如移除时，调用的 removeChild, 前提是真实 DOM,但事实上是任意的，可能是组件， 需要封装一个 removeNode. 考虑组件的生命周期。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
