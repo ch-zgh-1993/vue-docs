@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-05-09 18:33:15
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-05-22 20:03:55
+* @Last Modified time: 2020-05-22 20:22:51
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -348,6 +348,20 @@ function h(tag, data = null, children = null) {
 
 - 不足之处： 比如移除时，调用的 removeChild, 前提是真实 DOM,但事实上是任意的，可能是组件， 需要封装一个 removeNode. 考虑组件的生命周期。
 
+
+
+## 自定义渲染器和异步渲染
+
+- 自定义渲染器的原理：
+    + 渲染器为了将 Virtual DOM 渲染为真实 DOM, 内部需要调用浏览器提供的 DOM 编程接口. 完成对 DOM  的增删改查。 但是如果要进行跨平台使用，则渲染器不能依赖任何一个平台的特有接口。 应该提供一个抽象层，将 DOM 操作使用抽象接口进行定义，具体到每个平台，由开发者自己实现抽象层。这就是自定义渲染器的本质。
+    + 跨平台的渲染器需要包括： 自定义元素增加，删除，查找操作。 自定义元素自身属性/特性的修改操作。 createRender 创建渲染器。
+    + 要传递的操作方法：‘
+        * createElement, createText, setText, appendChild, insertBefore, removeChild, parentNode, nextSibling, querySelector
+        * patchData:
+        * 替换平台操作：渲染器中的浏览器操作替换为平台操作。
+
+- 自定义渲染器的应用:
+    + vue3 提供了一个 @vue/runtime-test 的包，作用是方便开发者在无 DOM 时，有能力对组件渲染的内容进行测试。
 
 
 
