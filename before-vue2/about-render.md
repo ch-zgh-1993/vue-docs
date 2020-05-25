@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-05-09 18:33:15
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-05-22 20:22:51
+* @Last Modified time: 2020-05-25 20:22:16
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -362,52 +362,27 @@ function h(tag, data = null, children = null) {
 
 - 自定义渲染器的应用:
     + vue3 提供了一个 @vue/runtime-test 的包，作用是方便开发者在无 DOM 时，有能力对组件渲染的内容进行测试。
+    + 创建元素方法，并没有规定元素让谁来创建，具有什么特征。那么不通过平台，我们自己来返回一个对象，作为创建结果。创建的元素不来自于浏览器的 DOM 编程接口，更不来自于任何其他平台的 API。所以同就可以在 NodeJs 运行。
+    + 元素的定义： 我们通过必须的一些属性来完成。
+```js
+const customElement = {
+  type, // 元素的类型：ELEMENT ---> 标签元素；TEXT ---> 文本
+  tag, // 当 type === 'ELEMENT' 时，tag 属性为标签名字
+  parentNode, // 对父节点的引用
+  children, // 子节点
+  props,  // 当 type === 'ELEMENT' 时，props 中存储着元素的属性/特性
+  eventListeners,  // 当 type === 'ELEMENT' 时，eventListeners 中存储着元素的事件信息
+  text  // 当 type === 'TEXT' 时，text 存储着文本内容
+}
+```
+        * 添加元素: appendChild 增加父元素的 children, 并切换 parentNode 的指向。
+        * removeChild: 遍历 parent.children, 找到删除，没找到抛出错误。清空子节点的 parentNode 指针。 
+        * 模拟实现前面提到的所有的 nodeOps 下的方法。
+        *  模拟实现 patchData 函数，改函数相对于 web 平台就简单了许多。
+    +  该自定义渲染器就可以实现对组件的测试需求。
+    +  自定义渲染器实现其他功能:
+        *  渲染到 PDF
+        *  渲染到文件系统
+        *  canvas 渲染器
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+- 自定义渲染器本身就是平台无关的，很多事情需要看特定平台的能力，渲染器为你提供的就是在组件层面的抽象能力以及虚拟 DOM 的更新算法，剩下的就靠社区的想象力和实现能力了。
