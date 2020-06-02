@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-06-01 14:28:45
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-06-02 10:08:42
+* @Last Modified time: 2020-06-02 20:57:50
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -263,6 +263,7 @@ vue ssr 提供一个名为 createBundleRenderer API, 通过使用 webpack 自定
 
 ### 服务器配置
 
+SSR 配置与 SPA webpack 配置大致相似，我们将配置分为三个文件， base, client, server. base 共享， client 为客户端， server 为服务端。可以使用 webpack-merge 扩展基本配置。
 
 
 
