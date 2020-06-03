@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-06-01 14:28:45
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-06-02 20:57:50
+* @Last Modified time: 2020-06-03 20:41:21
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -261,9 +261,220 @@ vue ssr 提供一个名为 createBundleRenderer API, 通过使用 webpack 自定
 
 ## 构建配置
 
+SSR 配置与 SPA webpack 配置大致相似，我们将配置分为三个文件， base, client, server. base 共享， client 为客户端， server 为服务端。可以使用 webpack-merge 扩展基本配置。
+
 ### 服务器配置
 
-SSR 配置与 SPA webpack 配置大致相似，我们将配置分为三个文件， base, client, server. base 共享， client 为客户端， server 为服务端。可以使用 webpack-merge 扩展基本配置。
+用于生成传递给 createBundleRenderer 的 server bundle.
+
+```js
+const merge = require('webpack-merge')
+const nodeExternals = require('webpack-node-externals')
+const baseConfig = require('./webpack.base.config.js')
+const VueSSRServerPlugin = require('vue-server-renderer/server-plugin')
+
+module.exports = merge(baseConfig, {
+  // 将 entry 指向应用程序的 server entry 文件
+  entry: '/path/to/entry-server.js',
+
+  // 这允许 webpack 以 Node 适用方式(Node-appropriate fashion)处理动态导入(dynamic import)，
+  // 并且还会在编译 Vue 组件时，
+  // 告知 `vue-loader` 输送面向服务器代码(server-oriented code)。
+  target: 'node',
+
+  // 对 bundle renderer 提供 source map 支持
+  devtool: 'source-map',
+
+  // 此处告知 server bundle 使用 Node 风格导出模块(Node-style exports)
+  output: {
+    libraryTarget: 'commonjs2'
+  },
+
+  // https://webpack.js.org/configuration/externals/#function
+  // https://github.com/liady/webpack-node-externals
+  // 外置化应用程序依赖模块。可以使服务器构建速度更快，
+  // 并生成较小的 bundle 文件。
+  externals: nodeExternals({
+    // 不要外置化 webpack 需要处理的依赖模块。
+    // 你可以在这里添加更多的文件类型。例如，未处理 *.vue 原始文件，
+    // 你还应该将修改 `global`（例如 polyfill）的依赖模块列入白名单
+    whitelist: /\.css$/
+  }),
+
+  // 这是将服务器的整个输出
+  // 构建为单个 JSON 文件的插件。
+  // 默认文件名为 `vue-ssr-server-bundle.json`
+  plugins: [
+    new VueSSRServerPlugin()
+  ]
+})
+```
+生成 vue-ssr-server-bundle.json 后，将文件路径传递给 createBundleRenderer
+
+```js
+const { createBundleRenderer } = require('vue-server-renderer')
+const renderer = createBundleRenderer('/path/to/vue-ssr-server-bundle.json', {
+  // ……renderer 的其他选项
+})
+```
+
+可以将 bundle 作为对象传递给 createBundleRenderer, 这对热重载非常有用。
+
+### 扩展说明
+
+请注意，在 externals 选项中，我们将 CSS 文件列入白名单。这是因为从依赖模块导入的 CSS 还应该由 webpack 处理。如果你导入依赖于 webpack 的任何其他类型的文件（例如 *.vue, *.sass），那么你也应该将它们添加到白名单中。
+
+
+如果你使用 runInNewContext: 'once' 或 runInNewContext: true，那么你还应该将修改 global 的 polyfill 列入白名单，例如 babel-polyfill。这是因为当使用新的上下文模式时，**server bundle 中的代码具有自己的 global 对象。**由于在使用 Node 7.6+ 时，在服务器并不真正需要它，所以实际上只需在客户端 entry 导入它。
+
+
+### 客户端配置
+
+
+client config 和 base config 大体上相同。显然你需要把 entry 指向你的客户端入口文件。除此之外，如果你使用 CommonsChunkPlugin，请确保仅在客户端配置 client config 中使用，因为服务器包需要单独的入口 chunk。
+
+
+生成 clientManifest: 客户端构建清淡，使用 client mainfest 和 server bundle, renderer 有了这些构建信息，可以自动推断和注入 资源预加载/数据预取指令，以及 css, scrpit 到所渲染的 html.
+
+- 在生成的文件名中有哈希时，可以取代 html-webpack-plugin 来注入正确的资源 URL。
+- 在通过 webpack 的按需代码分割特性渲染 bundle 时，我们可以确保对 chunk 进行最优化的资源预加载/数据预取，并且还可以将所需的异步 chunk 智能地注入为 script 标签，以避免客户端的瀑布式请求 (waterfall request)，以及改善可交互时间 (TTI - time-to-interactive)。
+
+客户端配置:
+
+```js
+const webpack = require('webpack')
+const merge = require('webpack-merge')
+const baseConfig = require('./webpack.base.config.js')
+const VueSSRClientPlugin = require('vue-server-renderer/client-plugin')
+
+module.exports = merge(baseConfig, {
+  entry: '/path/to/entry-client.js',
+  plugins: [
+    // 重要信息：这将 webpack 运行时分离到一个引导 chunk 中，
+    // 以便可以在之后正确注入异步 chunk。
+    // 这也为你的 应用程序/vendor 代码提供了更好的缓存。
+    new webpack.optimize.CommonsChunkPlugin({
+      name: "manifest",
+      minChunks: Infinity
+    }),
+    // 此插件在输出目录中
+    // 生成 `vue-ssr-client-manifest.json`。
+    new VueSSRClientPlugin()
+  ]
+})
+```
+
+
+使用客户端清单以及页面模版：
+
+```js
+const { createBundleRenderer } = require('vue-server-renderer')
+
+const template = require('fs').readFileSync('/path/to/template.html', 'utf-8')
+const serverBundle = require('/path/to/vue-ssr-server-bundle.json')
+const clientManifest = require('/path/to/vue-ssr-client-manifest.json')
+
+const renderer = createBundleRenderer(serverBundle, {
+  template,
+  clientManifest
+})
+```
+
+通过以上设置，使用代码分割特性构建后的服务端渲染的 HTML 代码，看起来如下: (所有的都是自动注入)
+
+```html
+<html>
+  <head>
+    <!-- 用于当前渲染的 chunk 会被资源预加载(preload) -->
+    <link rel="preload" href="/manifest.js" as="script">
+    <link rel="preload" href="/main.js" as="script">
+    <link rel="preload" href="/0.js" as="script">
+    <!-- 未用到的异步 chunk 会被数据预取(prefetch)（次要优先级） -->
+    <link rel="prefetch" href="/1.js" as="script">
+  </head>
+  <body>
+    <!-- 应用程序内容 -->
+    <div data-server-rendered="true"><div>async</div></div>
+    <!-- manifest chunk 优先 -->
+    <script src="/manifest.js"></script>
+    <!-- 在主 chunk 之前注入异步 chunk -->
+    <script src="/0.js"></script>
+    <script src="/main.js"></script>
+  </body>
+</html>
+```
+
+
+### 手动资源注入
+
+
+当提供 template 选项时，资源是自动注入的。当你想要对资源注入进行细粒度的控制，或者根本不使用模版，可以创建 renderer 并手动执行资源注入，传入 inject: false.
+
+
+在 renderToString 回调中， context 会暴露一下方法：
+
+- context.renderStyles(): 返回内联 style 包含的 关键 CSS, 关键 CSS 是在要用到 .vue 组件中收集的。
+    + 如果提供了 clientManifest, 返回 CSS 中也将包含 link 由 webpack 输入的 css 文件。
+- context.renderState(options?: Object): 此方法序列化 context.state, 并返回一个内联的 script, 状态被嵌入在 window.__INITIAL_STATE__, 上下文状态键 (context state key) 和 window 状态键 (window state key)， 都可以通过传递选项对象进行自定义
+- context.renderScripts(): 需要 clientManifest; 此方法返回应用程序所需的 script 标签，当在应用程序中使用一步代码分割(async code-spliting) 时，将智能地正确的推断需要引入的那些异步 chunk。
+- context.renderResourceHints():  需要 clientManifest, 返回当前要渲染的页面，所需要的 link rel="preload/prefetch" 资源提示，默认情况下会: 
+    + 预加载页面所需的 js 和 css 文件
+    + 预取一步 js chunk， 之后可能用于渲染。
+- 使用 shouldPreload 选项可以进一步自定义要预加载的文件。
+
+- context.getPreloadFiles()： 需要 clientManifest, 此方法不返回字符串，而是返回一个数组，由要预加载的资源文件对象所组成，这可以用在以编程方式执行 HTTP/2 服务器推送 (HTTP/2 server push)
+
+
+由于传递给 createBundleRender 的 template 将会使用 context 对象进行差值，你可以通过传入 inject: false 在模版中使用这些方法：
+
+```html
+<html>
+  <head>
+    <!-- 使用三花括号(triple-mustache)进行 HTML 不转义插值(non-HTML-escaped interpolation) -->
+    {{{ renderResourceHints() }}}
+    {{{ renderStyles() }}}
+  </head>
+  <body>
+    <!--vue-ssr-outlet-->
+    {{{ renderState() }}}
+    {{{ renderScripts() }}}
+  </body>
+</html>
+```
+
+
+如果你根本没有使用 tempalte , 可以自己拼接字符串。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
