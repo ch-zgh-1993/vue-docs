@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-06-01 14:28:45
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-06-03 20:41:21
+* @Last Modified time: 2020-07-07 21:21:42
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -446,13 +446,203 @@ const renderer = createBundleRenderer(serverBundle, {
 如果你根本没有使用 tempalte , 可以自己拼接字符串。
 
 
+## CSS 管理
+
+同 SPA 项目一样，推荐使用 .vue 中的 style, 提供如下功能：
+
+- 组件作用域
+- 能够使用预处理器 pre-processor / postCss
+- 开发中 hot-reload
+
+vue-loader 中的 vue-style-loader 具备一些服务端渲染的特殊功能：
+
+- SPA/SSR 通用编程体验
+- 在使用 bundleRenderer 时，自动注入关键 CSS(critical CSS)： 
+  + 如果在服务器端渲染期间使用，可以在 HTML 中收集和内联（使用 template 选项时自动处理）组件的 CSS。在客户端，当第一次使用该组件时，vue-style-loader 会检查这个组件是否已经具有服务器内联(server-inlined)的 CSS - 如果没有，CSS 将通过 style 标签动态注入。
+- 通用 css 提取
+  + 此设置支持使用 extract-text-webpack-plugin 将主 chunk(main chunk) 中的 CSS 提取到单独的 CSS 文件中（使用 template 自动注入），这样可以将文件分开缓存。建议用于存在很多公用 CSS 时。
+- 内部异步组件中的 CSS 将内联为 JavaScript 字符串，并由 vue-style-loader 处理。
+
+### 启用 css 提取
+
+使用 vue-loader 中的 extractCSS 选项，版本 vue-loader 12.0.0+
+
+```js
+// webpack.config.js
+const ExtractTextPlugin = require('extract-text-webpack-plugin')
+
+// CSS 提取应该只用于生产环境
+// 这样我们在开发过程中仍然可以热重载
+const isProduction = process.env.NODE_ENV === 'production'
+
+module.exports = {
+  // ...
+  module: {
+    rules: [
+      {
+        test: /\.vue$/,
+        loader: 'vue-loader',
+        options: {
+          // enable CSS extraction
+          extractCSS: isProduction
+        }
+      },
+      // ...
+    ]
+  },
+  plugins: isProduction
+    // 确保添加了此插件！
+    ? [new ExtractTextPlugin({ filename: 'common.[chunkhash].css' })]
+    : []
+}
 
 
+```
+请注意，上述配置仅适用于 *.vue 文件中的样式，然而你也可以使用 style src="./foo.css"将外部 CSS 导入 Vue 组件。
 
 
+如果你想从 JavaScript 中导入 CSS，例如，import 'foo.css'，你需要配置合适的 loader：
+
+```js
+module.exports = {
+  // ...
+  module: {
+    rules: [
+      {
+        test: /\.css$/,
+        // 重要：使用 vue-style-loader 替代 style-loader
+        use: isProduction
+          ? ExtractTextPlugin.extract({
+              use: 'css-loader',
+              fallback: 'vue-style-loader'
+            })
+          : ['vue-style-loader', 'css-loader']
+      }
+    ]
+  },
+  // ...
+}
+```
+
+### 从依赖模块导入样式
 
 
+从 NPM 依赖模块导入 CSS 时需要注意的几点：
 
+- 在 SSR 构建过程中，不应该外置化提取。
+- 在使用 CSS 提取 + 使用 CommonsChunkPlugin 插件提取 vendor 时，如果提取的 CSS 位于提取的 vendor chunk 之中，extract-text-webpack-plugin 会遇到问题。为了解决这个问题，请避免在 vendor chunk 中包含 CSS 文件。客户端 webpack 配置示例如下：
+
+```js
+module.exports = {
+  // ...
+  plugins: [
+    // 将依赖模块提取到 vendor chunk 以获得更好的缓存，是很常见的做法。
+    new webpack.optimize.CommonsChunkPlugin({
+      name: 'vendor',
+      minChunks: function (module) {
+        // 一个模块被提取到 vendor chunk 时……
+        return (
+          // 如果它在 node_modules 中
+          /node_modules/.test(module.context) &&
+          // 如果 request 是一个 CSS 文件，则无需外置化提取
+          !/\.css$/.test(module.request)
+        )
+      }
+    }),
+    // 提取 webpack 运行时和 manifest
+    new webpack.optimize.CommonsChunkPlugin({
+      name: 'manifest'
+    }),
+    // ...
+  ]
+}
+```
+
+
+## Head 管理
+
+类似于资源注入，Head管理遵循相同的理念：我们可以在组件的生命周期中，将数据动态地追加到渲染上下文 (render context)，然后在模板中的占位符替换为这些数据
+
+- 在 2.3.2 + , 可以通过 this.$ssrContext 来直接访问组件中的服务器端渲染上下文。旧版本中hack, 传递给 createApp, 并暴露在根实例的 options 上，才能手动注入 ssr context, 子组件通过 this.$root.$options.ssrContext 访问。
+
+标题管理 mixin
+```js
+// title-mixin.js
+
+function getTitle (vm) {
+  // 组件可以提供一个 `title` 选项
+  // 此选项可以是一个字符串或函数
+  const { title } = vm.$options
+  if (title) {
+    return typeof title === 'function'
+      ? title.call(vm)
+      : title
+  }
+}
+
+const serverTitleMixin = {
+  created () {
+    const title = getTitle(this)
+    if (title) {
+      this.$ssrContext.title = title
+    }
+  }
+}
+
+const clientTitleMixin = {
+  mounted () {
+    const title = getTitle(this)
+    if (title) {
+      document.title = title
+    }
+  }
+}
+
+// 可以通过 `webpack.DefinePlugin` 注入 `VUE_ENV`
+export default process.env.VUE_ENV === 'server'
+  ? serverTitleMixin
+  : clientTitleMixin
+
+// 在路由组件上，利用 mixin , 控制 document title
+// Item.vue
+export default {
+  mixins: [titleMixin],
+  title () {
+    return this.item.title
+  },
+
+  asyncData ({ store, route }) {
+    return store.dispatch('fetchItem', route.params.id)
+  },
+
+  computed: {
+    item () {
+      return this.$store.state.items[this.$route.params.id]
+    }
+  }
+}
+
+```
+
+```html
+// 然后模板中的内容将会传递给 bundle renderer：
+
+<html>
+  <head>
+    <title>{{ title }}</title>
+  </head>
+  <body>
+    ...
+  </body>
+</html>
+```
+
+注意内容：
+
+- 使用双花括号(double-mustache)进行 HTML 转义插值(HTML-escaped interpolation)，以避免 XSS 攻击。
+- 你应该在创建 context 对象时提供一个默认标题，以防在渲染过程中组件没有设置标题。
+
+使用相同的策略，你可以轻松地将此 mixin 扩展为通用的头部管理工具 (generic head management utility)。
 
 
 

@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-06-01 11:58:00
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-06-02 10:08:48
+* @Last Modified time: 2020-07-06 14:39:22
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -32,7 +32,9 @@
 - 更多的 服务器端负载。 在 Node js 中渲染，显然比提供静态文件的 Server 更加大量占用 CPU, 在高流量环境使用，需要准备相应的服务器负载，选择合理的缓存策略。
 
 
+## SSR 项目与 SPA 开发注意事项
 
+- 总的来说， SSR 是运行在 Node JS Server 环境，所以同样的不具备 Browser, DOM 对象。其实同 小程序一样，基于 V8 , 以及当前的宿主环境来进行，所以区别是类似的。
 
 
 
