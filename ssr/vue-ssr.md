@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-06-01 14:28:45
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-07-07 21:21:42
+* @Last Modified time: 2020-07-09 21:02:57
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -648,6 +648,63 @@ export default {
 
 
 
+## 缓存
+
+SSR 项目是快，但是创建组件实例，虚拟 DOM 节点的开销，无法与基于字符串拼接(pure string-base) 的模版性能相当，我们要利用缓存，提升性能，减少服务器负载。
+
+### Page level caching
+
+相同的地址，对于不同的用户，展示相同的内容，可以使用 micro-caching 策略，来提高程序处理高流量的能力。 通常在 nginx 层完成。 我们也可以在 Node 中实现。那就在 ng 做。
+
+
+## component level caching
+
+vue-server-renderer 内支持。要启用，在创建 renderer 时提供 cache implementaton, 典型做法是传入 lru-cache.
+
+```js
+const LRU = require('lru-cache')
+
+const renderer = createRenderer({
+  cache: LRU({
+    max: 10000,
+    maxAge: ...
+  })
+})
+```
+
+怎么实现呢？ 通过 serverCacheKey, name 唯一。serverCacheKey 返回的 key 应该包含足够的信息，来表示渲染结果的具体情况。 返回常量将导致组件始终被缓存，这对纯静态组件是有好处的。
+
+```js
+export default {
+  name: 'item', // 必填选项
+  props: ['item'],
+  serverCacheKey: props => props.item.id,
+  render (h) {
+    return h('div', this.item.id)
+  }
+}
+```
+
+### 什么时候用 component cache
+
+如果 renderer 在渲染过程中进行缓存命中，那么将直接重新使用整个子树的缓存结果。那么一下情况 **不**该使用：
+
+- 可能依赖全局状态的子组件。 不依赖外部状态。
+- 对渲染上下文产生副作用的子组件。 不对外部产生影响。
+
+小心使用它来解决性能瓶颈问题，多数情况下，不需要缓存单一实例组件。 常见可用，在大的 v-for 中重复出现的组件，由于这些组件通常由数据库集合(database collection)中的对象驱动，它们可以使用简单的缓存策略：使用其唯一 id，再加上最后更新的时间戳，来生成其缓存键(cache key)。
+
+
+
+## 流式渲染
+
+vue ssr 对于 renderer & bundle renderer 提供开箱即用的流式渲染功能。 使用 renderToStream 代替 renderToString, 返回的是 Node.js stream
+
+在流式渲染模式下，当 renderer 遍历虚拟 DOM 树 (virtual DOM tree) 时，会尽快发送数据。这意味着我们可以尽快获得"第一个 chunk"，并开始更快地将其发送给客户端。
+
+然而，当第一个数据 chunk 被发出时，子组件甚至可能不被实例化，它们的生命周期钩子也不会被调用。这意味着，如果子组件需要在其生命周期钩子函数中，将数据附加到渲染上下文 (render context)，当流 (stream) 启动时，这些数据将不可用。这是因为，大量上下文信息 (context information)（如头信息 (head information) 或内联关键 CSS(inline critical CSS)）需要在应用程序标记 (markup) 之前出现，我们基本上必须等待流(stream)完成后，才能开始使用这些上下文数据。
+
+因此，如果你依赖由组件生命周期钩子函数填充的上下文数据，则不建议使用流式传输模式。
 
 
 

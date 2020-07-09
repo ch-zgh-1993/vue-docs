@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-06-01 11:58:00
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-07-06 14:39:22
+* @Last Modified time: 2020-07-09 20:28:28
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -12,6 +12,20 @@
 - 服务器渲染的 Vue.js 应用程序也可以被认为是"同构"或"通用"，因为应用程序的大部分代码都可以在服务器和客户端上运行。
 - 运行在服务器和客户端的代码:由于用例和平台API的差异，当运行在不同环境中时，我们的代码将不会完全相同.
 
+
+## 相关内容概念
+
+- 源码结构
+- 路由和代码分割
+- 数据预取和状态
+- 客户端激活 (client-side hydration)
+- Bundle Renderer
+- 构建配置
+- CSS 管理
+- Head 管理
+- 缓存：这个通用的，不仅仅是 SPA 项目
+- 流式渲染
+- 非 nodejs 环境中，比如 Java, python ?
 
 
 
