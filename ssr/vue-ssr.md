@@ -2,7 +2,7 @@
 * @Author: Zhang Guohua
 * @Date:   2020-06-01 14:28:45
 * @Last Modified by:   zgh
-* @Last Modified time: 2020-07-09 21:02:57
+* @Last Modified time: 2020-07-27 21:19:40
 * @Description: create by zgh
 * @GitHub: Savour Humor
 */
@@ -707,16 +707,11 @@ vue ssr 对于 renderer & bundle renderer 提供开箱即用的流式渲染功�
 因此，如果你依赖由组件生命周期钩子函数填充的上下文数据，则不建议使用流式传输模式。
 
 
+## 在非 Node.js 环境中使用
 
+vue-server-renderer 默认在 Node.js 环境中，与环境无关的构建，编译到了 vue-server-renderer/basic.js 中。对于所有的环境，必须在环境中模拟 global 和 process 对象，将 process.env.VUE_ENV 设置为 server, process.env.NODE_ENV = 'development' || 'productin'
 
-
-
-
-
-
-
-
-
+在 Nashorn 环境中，肯跟海需要 Java 原生定时器，为 Promise 的 setTime 提供 polyfill
 
 
 
